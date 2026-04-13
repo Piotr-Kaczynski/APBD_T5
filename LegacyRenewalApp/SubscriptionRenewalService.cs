@@ -7,17 +7,35 @@ namespace LegacyRenewalApp
         private readonly RenewalRequestValidator _validator;
         private readonly DiscountCalculator _discountCalculator;
         private readonly TaxRateProvider _taxRateProvider;
+        private readonly IBillingGateway _billingGateway;
+        private readonly ICustomerRepository _customerRepository;
+        private readonly ISubscriptionPlanRepository _planRepository;
 
         public SubscriptionRenewalService()
-            : this(new RenewalRequestValidator(), new DiscountCalculator(), new TaxRateProvider())
+            : this(
+                new RenewalRequestValidator(),
+                new DiscountCalculator(),
+                new TaxRateProvider(),
+                new BillingGatewayClass(),
+                new CustomerRepository(),
+                new SubscriptionPlanRepository())
         {
         }
 
-        public SubscriptionRenewalService(RenewalRequestValidator validator, DiscountCalculator discountCalculator, TaxRateProvider taxRateProvider)
+        public SubscriptionRenewalService(
+            RenewalRequestValidator validator,
+            DiscountCalculator discountCalculator,
+            TaxRateProvider taxRateProvider,
+            IBillingGateway billingGateway,
+            ICustomerRepository customerRepository,
+            ISubscriptionPlanRepository planRepository)
         {
             _validator = validator;
             _discountCalculator = discountCalculator;
             _taxRateProvider = taxRateProvider;
+            _billingGateway = billingGateway;
+            _customerRepository = customerRepository;
+            _planRepository = planRepository;
         }
 
         public RenewalInvoice CreateRenewalInvoice(
@@ -33,11 +51,8 @@ namespace LegacyRenewalApp
             string normalizedPlanCode = planCode.Trim().ToUpperInvariant();
             string normalizedPaymentMethod = paymentMethod.Trim().ToUpperInvariant();
 
-            var customerRepository = new CustomerRepository();
-            var planRepository = new SubscriptionPlanRepository();
-
-            var customer = customerRepository.GetById(customerId);
-            var plan = planRepository.GetByCode(normalizedPlanCode);
+            var customer = _customerRepository.GetById(customerId);
+            var plan = _planRepository.GetByCode(normalizedPlanCode);
 
             if (!customer.IsActive)
             {
@@ -115,7 +130,7 @@ namespace LegacyRenewalApp
                 GeneratedAt = DateTime.UtcNow
             };
 
-            LegacyBillingGateway.SaveInvoice(invoice);
+            _billingGateway.SaveInvoice(invoice);
 
             if (!string.IsNullOrWhiteSpace(customer.Email))
             {
@@ -124,7 +139,7 @@ namespace LegacyRenewalApp
                     $"Hello {customer.FullName}, your renewal for plan {normalizedPlanCode} " +
                     $"has been prepared. Final amount: {invoice.FinalAmount:F2}.";
 
-                LegacyBillingGateway.SendEmail(customer.Email, subject, body);
+                _billingGateway.SendEmail(customer.Email, subject, body);
             }
 
             return invoice;
