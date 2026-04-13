@@ -6,16 +6,18 @@ namespace LegacyRenewalApp
     {
         private readonly RenewalRequestValidator _validator;
         private readonly DiscountCalculator _discountCalculator;
+        private readonly TaxRateProvider _taxRateProvider;
 
         public SubscriptionRenewalService()
-            : this(new RenewalRequestValidator(), new DiscountCalculator())
+            : this(new RenewalRequestValidator(), new DiscountCalculator(), new TaxRateProvider())
         {
         }
 
-        public SubscriptionRenewalService(RenewalRequestValidator validator, DiscountCalculator discountCalculator)
+        public SubscriptionRenewalService(RenewalRequestValidator validator, DiscountCalculator discountCalculator, TaxRateProvider taxRateProvider)
         {
             _validator = validator;
             _discountCalculator = discountCalculator;
+            _taxRateProvider = taxRateProvider;
         }
 
         public RenewalInvoice CreateRenewalInvoice(
@@ -52,8 +54,8 @@ namespace LegacyRenewalApp
             decimal supportFee = 0m;
             if (includePremiumSupport)
             {
-                if (normalizedPlanCode == "START")      supportFee = 250m;
-                else if (normalizedPlanCode == "PRO")   supportFee = 400m;
+                if (normalizedPlanCode == "START")           supportFee = 250m;
+                else if (normalizedPlanCode == "PRO")        supportFee = 400m;
                 else if (normalizedPlanCode == "ENTERPRISE") supportFee = 700m;
 
                 allNotes += "premium support included; ";
@@ -85,12 +87,7 @@ namespace LegacyRenewalApp
                 throw new ArgumentException("Unsupported payment method");
             }
 
-            decimal taxRate = 0.20m;
-            if (customer.Country == "Poland")          taxRate = 0.23m;
-            else if (customer.Country == "Germany")    taxRate = 0.19m;
-            else if (customer.Country == "Czech Republic") taxRate = 0.21m;
-            else if (customer.Country == "Norway")     taxRate = 0.25m;
-
+            decimal taxRate = _taxRateProvider.GetRate(customer.Country);
             decimal taxBase = subtotalAfterDiscount + supportFee + paymentFee;
             decimal taxAmount = taxBase * taxRate;
             decimal finalAmount = taxBase + taxAmount;
